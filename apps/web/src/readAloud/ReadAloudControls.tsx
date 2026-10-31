@@ -1,3 +1,4 @@
+import type { ReadAloudWordColor, ReadAloudWordStyle } from "@t3tools/contracts";
 import { PlayIcon, SquareIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -10,6 +11,7 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import { Slider } from "~/components/ui/slider";
+import { Switch } from "~/components/ui/switch";
 import { updateClientSettings, useClientSettings } from "~/hooks/useSettings";
 import { cn } from "~/lib/utils";
 
@@ -90,5 +92,84 @@ export function ReadAloudPreviewButton() {
       {previewing ? <SquareIcon /> : <PlayIcon />}
       {previewing ? "Stop" : "Preview"}
     </Button>
+  );
+}
+
+const WORD_STYLES: ReadonlyArray<{ readonly id: ReadAloudWordStyle; readonly label: string }> = [
+  { id: "underline", label: "Underline" },
+  { id: "highlight", label: "Highlight" },
+  { id: "both", label: "Both" },
+];
+
+const WORD_COLORS: ReadonlyArray<{ readonly id: ReadAloudWordColor; readonly label: string }> = [
+  { id: "accent", label: "Accent" },
+  { id: "yellow", label: "Yellow" },
+  { id: "green", label: "Green" },
+  { id: "blue", label: "Blue" },
+  { id: "pink", label: "Pink" },
+];
+
+export function ReadAloudWordSwitch() {
+  const enabled = useClientSettings((settings) => settings.readAloudWordHighlight);
+  return (
+    <Switch
+      checked={enabled}
+      onCheckedChange={(checked) =>
+        void updateClientSettings({ readAloudWordHighlight: Boolean(checked) })
+      }
+      aria-label="Show the current word"
+    />
+  );
+}
+
+export function ReadAloudWordStyleSelect({ className }: { className?: string }) {
+  const style = useClientSettings((settings) => settings.readAloudWordStyle);
+  const enabled = useClientSettings((settings) => settings.readAloudWordHighlight);
+  return (
+    <Select
+      value={style}
+      disabled={!enabled}
+      onValueChange={(value) => {
+        const next = WORD_STYLES.find((option) => option.id === value);
+        if (next) void updateClientSettings({ readAloudWordStyle: next.id });
+      }}
+    >
+      <SelectTrigger size="sm" className={className} aria-label="Current word style">
+        <SelectValue>{WORD_STYLES.find((option) => option.id === style)?.label}</SelectValue>
+      </SelectTrigger>
+      <SelectPopup align="end" alignItemWithTrigger={false}>
+        {WORD_STYLES.map((option) => (
+          <SelectItem hideIndicator key={option.id} value={option.id}>
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectPopup>
+    </Select>
+  );
+}
+
+export function ReadAloudWordColorSelect({ className }: { className?: string }) {
+  const color = useClientSettings((settings) => settings.readAloudWordColor);
+  const enabled = useClientSettings((settings) => settings.readAloudWordHighlight);
+  return (
+    <Select
+      value={color}
+      disabled={!enabled}
+      onValueChange={(value) => {
+        const next = WORD_COLORS.find((option) => option.id === value);
+        if (next) void updateClientSettings({ readAloudWordColor: next.id });
+      }}
+    >
+      <SelectTrigger size="sm" className={className} aria-label="Current word colour">
+        <SelectValue>{WORD_COLORS.find((option) => option.id === color)?.label}</SelectValue>
+      </SelectTrigger>
+      <SelectPopup align="end" alignItemWithTrigger={false}>
+        {WORD_COLORS.map((option) => (
+          <SelectItem hideIndicator key={option.id} value={option.id}>
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectPopup>
+    </Select>
   );
 }

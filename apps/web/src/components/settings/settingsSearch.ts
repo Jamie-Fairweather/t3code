@@ -468,6 +468,18 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["beta voice speech rate fast slow tts kokoro"],
   },
   {
+    id: "read-aloud-word",
+    title: "Show the current word",
+    to: "/settings/labs",
+    searchTerms: ["beta read aloud follow along underline highlight word karaoke"],
+  },
+  {
+    id: "read-aloud-word-look",
+    title: "Current word style",
+    to: "/settings/labs",
+    searchTerms: ["beta read aloud underline highlight colour color word"],
+  },
+  {
     id: "boring-sidebar-multiline",
     title: "Two-line folder rows",
     to: "/settings/labs",

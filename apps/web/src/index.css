@@ -676,6 +676,44 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   ::highlight(t3-assistant-citation-comment) {
     background-color: color-mix(in oklab, var(--primary) 45%, transparent);
   }
+  /* The word being read aloud; its colour comes from the read aloud settings. */
+  :root {
+    --read-aloud-word: var(--primary);
+  }
+  :root[data-read-aloud-word-color="yellow"] {
+    --read-aloud-word: oklch(0.681 0.162 75.834);
+    @variant dark {
+      --read-aloud-word: oklch(0.852 0.199 91.936);
+    }
+  }
+  :root[data-read-aloud-word-color="green"] {
+    --read-aloud-word: oklch(0.627 0.194 149.214);
+    @variant dark {
+      --read-aloud-word: oklch(0.792 0.209 151.711);
+    }
+  }
+  :root[data-read-aloud-word-color="blue"] {
+    --read-aloud-word: oklch(0.546 0.245 262.881);
+    @variant dark {
+      --read-aloud-word: oklch(0.707 0.165 254.624);
+    }
+  }
+  :root[data-read-aloud-word-color="pink"] {
+    --read-aloud-word: oklch(0.592 0.249 0.584);
+    @variant dark {
+      --read-aloud-word: oklch(0.718 0.202 349.761);
+    }
+  }
+  ::highlight(t3-read-aloud-underline) {
+    text-decoration: underline 2px var(--read-aloud-word);
+  }
+  ::highlight(t3-read-aloud-highlight) {
+    background-color: color-mix(in oklab, var(--read-aloud-word) 30%, transparent);
+  }
+  ::highlight(t3-read-aloud-both) {
+    text-decoration: underline 2px var(--read-aloud-word);
+    background-color: color-mix(in oklab, var(--read-aloud-word) 30%, transparent);
+  }
   :root {
     /* Keep the original T3 Code artwork palettes as the defaults. Built-in
        themes override them with their own pigments in the components layer. */

@@ -1,3 +1,5 @@
+import type { WordTime } from "./wordTiming";
+
 export type ReadAloudWorkerRequest =
   | {
       readonly type: "speak";
@@ -18,6 +20,8 @@ export type ReadAloudWorkerResponse =
       readonly epoch: number;
       readonly samples: Float32Array;
       readonly sampleRate: number;
+      /** When each word of the request's text is said; see wordTiming. */
+      readonly words: ReadonlyArray<WordTime>;
     }
   /** `id` is the failed request, or null when the model itself failed to load. */
   | { readonly type: "error"; readonly id: number | null; readonly message: string };

@@ -13,6 +13,9 @@ import {
   ReadAloudPreviewButton,
   ReadAloudSpeedSlider,
   ReadAloudVoiceSelect,
+  ReadAloudWordColorSelect,
+  ReadAloudWordStyleSelect,
+  ReadAloudWordSwitch,
 } from "./ReadAloudControls";
 import { setReadAloudEnabled, speakWithSettings, stopReadingAloud } from "./readAloudActions";
 import { stopSpeaking, useReadAloudEpoch, useReadAloudState } from "./readAloudEngine";
@@ -96,6 +99,18 @@ export const ReadAloudToggle = memo(function ReadAloudToggle({
               <div className="flex flex-col gap-1.5">
                 <span className="font-medium text-muted-foreground text-xs">Speed</span>
                 <ReadAloudSpeedSlider />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium text-muted-foreground text-xs">
+                    Show the current word
+                  </span>
+                  <ReadAloudWordSwitch />
+                </div>
+                <div className="flex items-center gap-2">
+                  <ReadAloudWordStyleSelect className="min-w-0 flex-1" />
+                  <ReadAloudWordColorSelect className="min-w-0 flex-1" />
+                </div>
               </div>
             </div>
           </PopoverPopup>

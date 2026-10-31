@@ -6,6 +6,7 @@
 import { useSyncExternalStore } from "react";
 
 import type { ReadAloudWorkerRequest, ReadAloudWorkerResponse } from "./workerProtocol";
+import type { WordTime } from "./wordTiming";
 
 /** `idle` means nothing is loaded; `loading` and `ready` mean the model is in memory. */
 export type ReadAloudStatus = "idle" | "loading" | "ready" | "error";
@@ -29,11 +30,21 @@ export interface SpeakOptions {
   readonly onHeard?: () => void;
 }
 
+/** The word being said now: index `index` of `splitWords(text)` for the chunk `chunkId`. */
+export interface SpokenWord {
+  readonly key: string;
+  readonly chunkId: number;
+  readonly text: string;
+  readonly index: number;
+}
+
 interface QueuedChunk {
   readonly id: number;
   readonly key: string;
+  readonly text: string;
   readonly onHeard: (() => void) | undefined;
   source: AudioBufferSourceNode | null;
+  wordTimers: Array<ReturnType<typeof setTimeout>>;
 }
 
 const IDLE: ReadAloudState = {
@@ -59,6 +70,35 @@ let nextId = 0;
 let playhead = 0;
 /** Chunks sent in the current epoch, in play order, until they finish playing. */
 let queue: Array<QueuedChunk> = [];
+let spokenWord: SpokenWord | null = null;
+const wordListeners = new Set<(word: SpokenWord | null) => void>();
+
+function setSpokenWord(next: SpokenWord | null): void {
+  if (next === spokenWord) return;
+  spokenWord = next;
+  for (const listener of wordListeners) listener(next);
+}
+
+/** Calls `listener` as each word starts, without going through React. */
+export function subscribeSpokenWord(listener: (word: SpokenWord | null) => void): () => void {
+  wordListeners.add(listener);
+  return () => wordListeners.delete(listener);
+}
+
+function clearWords(chunk: QueuedChunk): void {
+  for (const timer of chunk.wordTimers) clearTimeout(timer);
+  chunk.wordTimers = [];
+  if (spokenWord?.chunkId === chunk.id) setSpokenWord(null);
+}
+
+/** Drops every queued chunk, returning the sources still scheduled to play. */
+function clearQueue(): Array<AudioBufferSourceNode> {
+  const sources = queue.flatMap((chunk) => (chunk.source === null ? [] : [chunk.source]));
+  for (const chunk of queue) clearWords(chunk);
+  queue = [];
+  syncActiveKey();
+  return sources;
+}
 
 function post(request: ReadAloudWorkerRequest): void {
   worker?.postMessage(request);
@@ -70,6 +110,7 @@ function syncActiveKey(): void {
 }
 
 function remove(chunk: QueuedChunk): void {
+  clearWords(chunk);
   queue = queue.filter((queued) => queued !== chunk);
   syncActiveKey();
   unloadIfUnused();
@@ -84,8 +125,7 @@ function onWorkerMessage(event: MessageEvent<ReadAloudWorkerResponse>): void {
     case "error": {
       if (message.id === null) {
         setState({ status: "error", error: message.message });
-        queue = [];
-        syncActiveKey();
+        clearQueue();
         unloadIfUnused();
         return;
       }
@@ -97,13 +137,18 @@ function onWorkerMessage(event: MessageEvent<ReadAloudWorkerResponse>): void {
     case "audio": {
       if (message.epoch !== state.epoch) return;
       const chunk = queue.find((queued) => queued.id === message.id);
-      if (chunk !== undefined) play(chunk, message.samples, message.sampleRate);
+      if (chunk !== undefined) play(chunk, message.samples, message.sampleRate, message.words);
       return;
     }
   }
 }
 
-function play(chunk: QueuedChunk, samples: Float32Array, sampleRate: number): void {
+function play(
+  chunk: QueuedChunk,
+  samples: Float32Array,
+  sampleRate: number,
+  words: ReadonlyArray<WordTime>,
+): void {
   if (audio === null) return;
   const buffer = audio.createBuffer(1, samples.length, sampleRate);
   buffer.copyToChannel(samples as Float32Array<ArrayBuffer>, 0);
@@ -114,6 +159,13 @@ function play(chunk: QueuedChunk, samples: Float32Array, sampleRate: number): vo
   source.start(startAt);
   playhead = startAt + buffer.duration;
   chunk.source = source;
+  const context = audio;
+  chunk.wordTimers = words.map((word, index) =>
+    setTimeout(
+      () => setSpokenWord({ key: chunk.key, chunkId: chunk.id, text: chunk.text, index }),
+      Math.max(0, (startAt + word.start - context.currentTime) * 1000),
+    ),
+  );
   source.addEventListener("ended", () => {
     // A stop also fires `ended`; a stopped chunk has already left the queue.
     if (!queue.includes(chunk)) return;
@@ -142,8 +194,7 @@ function ensureWorker(): void {
   worker.addEventListener("message", onWorkerMessage);
   worker.addEventListener("error", (event) => {
     setState({ status: "error", error: event.message || "The voice failed to load." });
-    queue = [];
-    syncActiveKey();
+    clearQueue();
     unloadIfUnused();
   });
   setState({ status: "loading", error: null });
@@ -166,7 +217,14 @@ export function speak(text: string, options: SpeakOptions): void {
   audio ??= new AudioContext();
   void audio.resume();
   const id = nextId++;
-  queue.push({ id, key: options.key, onHeard: options.onHeard, source: null });
+  queue.push({
+    id,
+    key: options.key,
+    text,
+    onHeard: options.onHeard,
+    source: null,
+    wordTimers: [],
+  });
   syncActiveKey();
   post({
     type: "speak",
@@ -181,8 +239,7 @@ export function speak(text: string, options: SpeakOptions): void {
 /** Silences current speech and drops everything queued. Returns the keys that were dropped. */
 export function stopSpeaking(): ReadonlySet<string> {
   const dropped = new Set(queue.map((chunk) => chunk.key));
-  const sources = queue.flatMap((chunk) => (chunk.source === null ? [] : [chunk.source]));
-  queue = [];
+  const sources = clearQueue();
   playhead = 0;
   setState({ epoch: state.epoch + 1, activeKey: null });
   post({ type: "cancel", epoch: state.epoch });

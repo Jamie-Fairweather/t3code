@@ -348,6 +348,11 @@ export type ModelPreferences = {
   readonly providerModelPreferences: typeof ProviderModelPreferences.Type;
 };
 
+export const ReadAloudWordStyle = Schema.Literals(["underline", "highlight", "both"]);
+export type ReadAloudWordStyle = typeof ReadAloudWordStyle.Type;
+export const ReadAloudWordColor = Schema.Literals(["accent", "yellow", "green", "blue", "pink"]);
+export type ReadAloudWordColor = typeof ReadAloudWordColor.Type;
+
 export const ClientSettingsSchema = Schema.Struct({
   notificationMode: NotificationMode.pipe(
     Schema.withDecodingDefault(Effect.succeed("off" as const)),
@@ -481,6 +486,13 @@ export const ClientSettingsSchema = Schema.Struct({
   readAloudEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   readAloudVoice: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed("af_heart"))),
   readAloudSpeed: Schema.Number.pipe(Schema.withDecodingDefault(Effect.succeed(1))),
+  readAloudWordHighlight: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  readAloudWordStyle: ReadAloudWordStyle.pipe(
+    Schema.withDecodingDefault(Effect.succeed("underline" as const)),
+  ),
+  readAloudWordColor: ReadAloudWordColor.pipe(
+    Schema.withDecodingDefault(Effect.succeed("accent" as const)),
+  ),
   // Retired Labs toggle. Still read as the default for the Usage item in threadDetailsItems.
   threadDetailsUsageEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   // Sparse show/hide overrides for thread details card items. Missing ids use the client's
@@ -1781,6 +1793,9 @@ export const ClientSettingsPatch = Schema.Struct({
   readAloudEnabled: Schema.optionalKey(Schema.Boolean),
   readAloudVoice: Schema.optionalKey(Schema.String),
   readAloudSpeed: Schema.optionalKey(Schema.Number),
+  readAloudWordHighlight: Schema.optionalKey(Schema.Boolean),
+  readAloudWordStyle: Schema.optionalKey(ReadAloudWordStyle),
+  readAloudWordColor: Schema.optionalKey(ReadAloudWordColor),
   threadDetailsUsageEnabled: Schema.optionalKey(Schema.Boolean),
   threadDetailsItems: Schema.optionalKey(Schema.Record(Schema.String, Schema.Boolean)),
   legacySidebarEnabled: Schema.optionalKey(Schema.Boolean),
