@@ -8,5 +8,7 @@
   "ember-light",
   "ember-dark",
   "iris-light",
-  "iris-dark"
+  "iris-dark",
+  "t3-code-old-light",
+  "t3-code-old-dark"
 ]
