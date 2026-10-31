@@ -4,6 +4,9 @@ import { Link } from "@tanstack/react-router";
 import { hasCloudPublicConfig } from "~/cloud/publicConfig";
 import { useT3ConnectAuthPrompt } from "../clerk/useT3ConnectAuthPrompt";
 import { Button } from "../ui/button";
+import { READ_ALOUD_VOICES } from "~/readAloud/voices";
+import { shutdownReadAloud } from "~/readAloud/readAloudEngine";
+import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Switch } from "../ui/switch";
 import { ScopedSwitch } from "./ScopedSwitch";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
@@ -18,6 +21,8 @@ export function LabsSettingsPanel() {
       <SettingsSection id="beta" title="Beta">
         <BoringSidebarRow />
         <BoringSidebarMultilineRow />
+        <ReadAloudRow />
+        <ReadAloudVoiceRow />
         {/* Clerk is only mounted when this build has T3 Connect. */}
         {hasCloudPublicConfig() ? <GuestLinksRowWithSignIn /> : <GuestLinksRow />}
         <LinkedEnvironmentsRow />
@@ -64,6 +69,58 @@ function BoringSidebarMultilineRow() {
           }
           aria-label="Two-line folder rows"
         />
+      }
+    />
+  );
+}
+
+function ReadAloudRow() {
+  const settings = useScopedSettings();
+  const updateSettings = useUpdateScopedSettings();
+  return (
+    <SettingsRow
+      {...searchableSetting("read-aloud")}
+      description="Speak agent replies as they stream in, using the Kokoro voice model on this device. The model (about 300 MB) downloads once, loads only while there is something to say, and unloads after 30 seconds of quiet. Also toggled from the speaker button in the thread header."
+      control={
+        <Switch
+          checked={settings.readAloudEnabled}
+          onCheckedChange={(checked) => {
+            if (!checked) shutdownReadAloud();
+            updateSettings({ readAloudEnabled: Boolean(checked) });
+          }}
+          aria-label="Read replies aloud"
+        />
+      }
+    />
+  );
+}
+
+function ReadAloudVoiceRow() {
+  const settings = useScopedSettings();
+  const updateSettings = useUpdateScopedSettings();
+  const selected = READ_ALOUD_VOICES.find((voice) => voice.id === settings.readAloudVoice);
+  return (
+    <SettingsRow
+      {...searchableSetting("read-aloud-voice")}
+      description="The voice used to read replies aloud."
+      control={
+        <Select
+          value={settings.readAloudVoice}
+          onValueChange={(value) => {
+            if (typeof value === "string") updateSettings({ readAloudVoice: value });
+          }}
+        >
+          <SelectTrigger size="sm" className="w-full sm:w-48" aria-label="Read aloud voice">
+            <SelectValue>{selected?.label ?? settings.readAloudVoice}</SelectValue>
+          </SelectTrigger>
+          <SelectPopup align="end" alignItemWithTrigger={false}>
+            {READ_ALOUD_VOICES.map((voice) => (
+              <SelectItem hideIndicator key={voice.id} value={voice.id}>
+                {voice.label}
+              </SelectItem>
+            ))}
+          </SelectPopup>
+        </Select>
       }
     />
   );

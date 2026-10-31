@@ -23,6 +23,8 @@ allowBuilds:
   node-pty: true
   # Ships N-API prebuilds; its install script only rebuilds from source.
   objc-js: false
+  # From onnxruntime-web (read aloud); its install script only builds optional CLI tooling.
+  protobufjs: false
   "react-native-enriched-markdown@file:apps/mobile/deps/react-native-enriched-markdown-1.2.0-t3.16-29ddd424.tgz": true
   sharp: true
   "@tsc-rs/typescript": true
@@ -283,6 +285,9 @@ overrides:
   "@alchemy.run/sigil>react": "-"
   "@alchemy.run/sigil>react-reconciler": "-"
   "@alchemy.run/sigil>scheduler": "-"
+  # Read aloud runs transformers.js only in a browser worker; the Node runtimes are dead weight.
+  "@huggingface/transformers>onnxruntime-node": "-"
+  "@huggingface/transformers>sharp": "-"
   "@clerk/backend": "catalog:"
   "@clerk/clerk-js": "catalog:"
   "@clerk/clerk-js>@base-org/account": "-"

@@ -450,6 +450,18 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["beta folders project tree legacy old classic sidebar"],
   },
   {
+    id: "read-aloud",
+    title: "Read replies aloud",
+    to: "/settings/labs",
+    searchTerms: ["beta voice speech speak text to speech tts kokoro audio listen"],
+  },
+  {
+    id: "read-aloud-voice",
+    title: "Read aloud voice",
+    to: "/settings/labs",
+    searchTerms: ["beta voice speech speaker accent tts kokoro"],
+  },
+  {
     id: "boring-sidebar-multiline",
     title: "Two-line folder rows",
     to: "/settings/labs",
