@@ -480,6 +480,7 @@ export const ClientSettingsSchema = Schema.Struct({
   ),
   readAloudEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   readAloudVoice: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed("af_heart"))),
+  readAloudSpeed: Schema.Number.pipe(Schema.withDecodingDefault(Effect.succeed(1))),
   // Retired Labs toggle. Still read as the default for the Usage item in threadDetailsItems.
   threadDetailsUsageEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   // Sparse show/hide overrides for thread details card items. Missing ids use the client's
@@ -1779,6 +1780,7 @@ export const ClientSettingsPatch = Schema.Struct({
   boringSidebarMultilineRows: Schema.optionalKey(Schema.Boolean),
   readAloudEnabled: Schema.optionalKey(Schema.Boolean),
   readAloudVoice: Schema.optionalKey(Schema.String),
+  readAloudSpeed: Schema.optionalKey(Schema.Number),
   threadDetailsUsageEnabled: Schema.optionalKey(Schema.Boolean),
   threadDetailsItems: Schema.optionalKey(Schema.Record(Schema.String, Schema.Boolean)),
   legacySidebarEnabled: Schema.optionalKey(Schema.Boolean),

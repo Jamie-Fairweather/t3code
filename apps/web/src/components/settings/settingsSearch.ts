@@ -462,6 +462,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["beta voice speech speaker accent tts kokoro"],
   },
   {
+    id: "read-aloud-speed",
+    title: "Read aloud speed",
+    to: "/settings/labs",
+    searchTerms: ["beta voice speech rate fast slow tts kokoro"],
+  },
+  {
     id: "boring-sidebar-multiline",
     title: "Two-line folder rows",
     to: "/settings/labs",

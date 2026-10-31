@@ -41,10 +41,12 @@ async function loadModel(): Promise<KokoroTTS> {
       dtype: webgpu ? "fp32" : "q8",
       device: webgpu ? "webgpu" : "wasm",
     });
+    // The first generation compiles GPU shaders; doing it now keeps the first real sentence fast.
+    await tts.generate("Ready.");
     post({ type: "ready", device: webgpu ? "webgpu" : "wasm" });
     return tts;
   } catch (error) {
-    post({ type: "error", message: errorMessage(error) });
+    post({ type: "error", id: null, message: errorMessage(error) });
     throw error;
   }
 }
@@ -55,6 +57,7 @@ async function speak(request: Extract<ReadAloudWorkerRequest, { type: "speak" }>
   if (request.epoch < epoch) return;
   const result = await tts.generate(request.text, {
     voice: (request.voice in tts.voices ? request.voice : "af_heart") as keyof typeof tts.voices,
+    speed: request.speed,
   });
   if (request.epoch < epoch) return;
   const samples = result.audio;
@@ -82,5 +85,7 @@ self.addEventListener("message", (event: MessageEvent<ReadAloudWorkerRequest>) =
   }
   queue = queue
     .then(() => speak(request))
-    .catch((error: unknown) => post({ type: "error", message: errorMessage(error) }));
+    .catch((error: unknown) =>
+      post({ type: "error", id: request.id, message: errorMessage(error) }),
+    );
 });
