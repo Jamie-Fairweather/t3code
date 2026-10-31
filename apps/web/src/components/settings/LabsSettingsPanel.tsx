@@ -10,6 +10,9 @@ import {
   ReadAloudPreviewButton,
   ReadAloudSpeedSlider,
   ReadAloudVoiceSelect,
+  ReadAloudWordColorSelect,
+  ReadAloudWordStyleSelect,
+  ReadAloudWordSwitch,
 } from "~/readAloud/ReadAloudControls";
 import { Switch } from "../ui/switch";
 import { ScopedSwitch } from "./ScopedSwitch";
@@ -28,6 +31,8 @@ export function LabsSettingsPanel() {
         <ReadAloudRow />
         <ReadAloudVoiceRow />
         <ReadAloudSpeedRow />
+        <ReadAloudWordRow />
+        <ReadAloudWordLookRow />
         {/* Clerk is only mounted when this build has T3 Connect. */}
         {hasCloudPublicConfig() ? <GuestLinksRowWithSignIn /> : <GuestLinksRow />}
         <LinkedEnvironmentsRow />
@@ -117,6 +122,31 @@ function ReadAloudSpeedRow() {
       {...searchableSetting("read-aloud-speed")}
       description="How fast replies are read aloud."
       control={<ReadAloudSpeedSlider className="w-full sm:w-48" />}
+    />
+  );
+}
+
+function ReadAloudWordRow() {
+  return (
+    <SettingsRow
+      {...searchableSetting("read-aloud-word")}
+      description="Mark each word in the reply as it is read aloud, so you can follow along."
+      control={<ReadAloudWordSwitch />}
+    />
+  );
+}
+
+function ReadAloudWordLookRow() {
+  return (
+    <SettingsRow
+      {...searchableSetting("read-aloud-word-look")}
+      description="How the word being read is marked."
+      control={
+        <div className="flex w-full items-center gap-2 sm:w-auto">
+          <ReadAloudWordStyleSelect className="flex-1 sm:w-32 sm:flex-none" />
+          <ReadAloudWordColorSelect className="flex-1 sm:w-32 sm:flex-none" />
+        </div>
+      }
     />
   );
 }
