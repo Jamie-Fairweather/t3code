@@ -25,9 +25,13 @@ jobs:
     runs-on: windows-2025
     timeout-minutes: 90
     steps:
+      # Full history and tags (without file contents) so the release notes
+      # can list the commits since the previous build.
       - name: Checkout
         uses: actions/checkout@v6
         with:
+          fetch-depth: 0
+          filter: blob:none
           sparse-checkout: |
             /*
             !/.repos/
@@ -105,11 +109,50 @@ jobs:
             ls -la release >&2
             exit 1
           fi
-          upstream="$(git log -1 --format='%h %s' HEAD)"
+          # Notes list the commits since the previous fork build, grouped by
+          # their conventional-commit type ("feat(web): ..." -> New features).
+          prev="$(git describe --tags --abbrev=0 --match 'v*-jamie.*' HEAD 2>/dev/null || true)"
+          range="${prev:+$prev..}HEAD"
+          features=() fixes=() other=()
+          while IFS=$'\t' read -r sha subject; do
+            if [[ "$subject" =~ ^([a-z]+)(\(([^\)]*)\))?!?:[[:space:]]*(.+)$ ]]; then
+              type="${BASH_REMATCH[1]}" scope="${BASH_REMATCH[3]}" text="${BASH_REMATCH[4]}"
+            else
+              type="" scope="" text="$subject"
+            fi
+            line="- ${text^}${scope:+ ($scope)} ([\`$sha\`]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$sha))"
+            case "$type" in
+              feat) features+=("$line") ;;
+              fix|perf) fixes+=("$line") ;;
+              *) other+=("$line") ;;
+            esac
+          done < <(git log --no-merges --format='%h%x09%s' "$range" | head -n 200)
+          section() {
+            local title="$1"; shift
+            (( $# )) || return 0
+            printf '## %s\n\n' "$title"
+            printf '%s\n' "$@"
+            echo
+          }
+          {
+            section "New features" "${features[@]}"
+            section "Bug fixes" "${fixes[@]}"
+            section "Other changes" "${other[@]}"
+            if (( ${#features[@]} + ${#fixes[@]} + ${#other[@]} == 0 )); then
+              echo "No new commits since ${prev:-the last build}."
+              echo
+            fi
+            if [[ -n "$prev" ]]; then
+              echo "**Full changes:** $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/compare/$prev...v$VERSION"
+              echo
+            fi
+            echo "Windows x64 build. Unsigned: Windows may warn on first install (More info, then Run anyway). Installed copies update themselves from these releases."
+          } > release-notes.md
+          cat release-notes.md
           gh release create "v$VERSION" "${assets[@]}" \
             --target "$GITHUB_SHA" \
             --title "T3 Code $VERSION" \
-            --notes "Windows x64 build of this fork at \`$upstream\`. Unsigned: Windows may warn on first install (More info, then Run anyway). Installed copies update themselves from these releases." \
+            --notes-file release-notes.md \
             --latest
 
       # Keep the newest few; installed copies only ever need the latest.
