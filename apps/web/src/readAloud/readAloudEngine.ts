@@ -1,25 +1,48 @@
 /**
  * Plays text through the Kokoro worker; the next chunk synthesizes while the current one plays.
- * Nothing stays loaded while there is nothing to say: the worker, model, and audio device start
- * on the first chunk and are released after IDLE_UNLOAD_MS of quiet.
+ * While read aloud is on the model stays loaded (see setKeepLoaded). While it is off, a one-off
+ * read loads the model and releases it once the last chunk has played.
  */
 import { useSyncExternalStore } from "react";
 
 import type { ReadAloudWorkerRequest, ReadAloudWorkerResponse } from "./workerProtocol";
-
-const IDLE_UNLOAD_MS = 30_000;
 
 /** `idle` means nothing is loaded; `loading` and `ready` mean the model is in memory. */
 export type ReadAloudStatus = "idle" | "loading" | "ready" | "error";
 
 export interface ReadAloudState {
   readonly status: ReadAloudStatus;
-  readonly speaking: boolean;
+  /** Key of the chunk playing now, or next to play. Null when nothing is queued. */
+  readonly activeKey: string | null;
   readonly device: "webgpu" | "wasm" | null;
   readonly error: string | null;
+  /** Bumped by every stop, so readers know queued chunks were dropped. */
+  readonly epoch: number;
 }
 
-const IDLE: ReadAloudState = { status: "idle", speaking: false, device: null, error: null };
+export interface SpeakOptions {
+  readonly voice: string;
+  readonly speed: number;
+  /** Groups chunks, e.g. by message, for `activeKey` and `stopSpeaking`'s result. */
+  readonly key: string;
+  /** Runs once this chunk has played to the end. Not called for dropped chunks. */
+  readonly onHeard?: () => void;
+}
+
+interface QueuedChunk {
+  readonly id: number;
+  readonly key: string;
+  readonly onHeard: (() => void) | undefined;
+  source: AudioBufferSourceNode | null;
+}
+
+const IDLE: ReadAloudState = {
+  status: "idle",
+  activeKey: null,
+  device: null,
+  error: null,
+  epoch: 0,
+};
 
 let state = IDLE;
 const listeners = new Set<() => void>();
@@ -31,16 +54,25 @@ function setState(patch: Partial<ReadAloudState>): void {
 
 let worker: Worker | null = null;
 let audio: AudioContext | null = null;
-let epoch = 0;
+let keepLoaded = false;
 let nextId = 0;
-/** Chunks sent to the worker in the current epoch whose audio has not arrived yet. */
-let pending = 0;
 let playhead = 0;
-let idleTimer: ReturnType<typeof setTimeout> | null = null;
-const playing = new Set<AudioBufferSourceNode>();
+/** Chunks sent in the current epoch, in play order, until they finish playing. */
+let queue: Array<QueuedChunk> = [];
 
 function post(request: ReadAloudWorkerRequest): void {
   worker?.postMessage(request);
+}
+
+function syncActiveKey(): void {
+  const activeKey = queue[0]?.key ?? null;
+  if (activeKey !== state.activeKey) setState({ activeKey });
+}
+
+function remove(chunk: QueuedChunk): void {
+  queue = queue.filter((queued) => queued !== chunk);
+  syncActiveKey();
+  unloadIfUnused();
 }
 
 function onWorkerMessage(event: MessageEvent<ReadAloudWorkerResponse>): void {
@@ -49,20 +81,29 @@ function onWorkerMessage(event: MessageEvent<ReadAloudWorkerResponse>): void {
     case "ready":
       setState({ status: "ready", device: message.device, error: null });
       return;
-    case "error":
-      pending = 0;
-      setState({ status: "error", error: message.message });
-      scheduleUnloadWhenQuiet();
+    case "error": {
+      if (message.id === null) {
+        setState({ status: "error", error: message.message });
+        queue = [];
+        syncActiveKey();
+        unloadIfUnused();
+        return;
+      }
+      // One sentence failed; skip it and keep going.
+      const failed = queue.find((chunk) => chunk.id === message.id);
+      if (failed !== undefined) remove(failed);
       return;
-    case "audio":
-      if (message.epoch !== epoch) return;
-      pending = Math.max(0, pending - 1);
-      play(message.samples, message.sampleRate);
+    }
+    case "audio": {
+      if (message.epoch !== state.epoch) return;
+      const chunk = queue.find((queued) => queued.id === message.id);
+      if (chunk !== undefined) play(chunk, message.samples, message.sampleRate);
       return;
+    }
   }
 }
 
-function play(samples: Float32Array, sampleRate: number): void {
+function play(chunk: QueuedChunk, samples: Float32Array, sampleRate: number): void {
   if (audio === null) return;
   const buffer = audio.createBuffer(1, samples.length, sampleRate);
   buffer.copyToChannel(samples as Float32Array<ArrayBuffer>, 0);
@@ -72,75 +113,82 @@ function play(samples: Float32Array, sampleRate: number): void {
   const startAt = Math.max(audio.currentTime + 0.02, playhead);
   source.start(startAt);
   playhead = startAt + buffer.duration;
-  playing.add(source);
-  setState({ speaking: true });
+  chunk.source = source;
   source.addEventListener("ended", () => {
-    playing.delete(source);
-    if (playing.size === 0) setState({ speaking: false });
-    scheduleUnloadWhenQuiet();
+    // A stop also fires `ended`; a stopped chunk has already left the queue.
+    if (!queue.includes(chunk)) return;
+    chunk.onHeard?.();
+    remove(chunk);
   });
 }
 
-function cancelUnload(): void {
-  if (idleTimer !== null) clearTimeout(idleTimer);
-  idleTimer = null;
-}
-
-function scheduleUnloadWhenQuiet(): void {
-  if (pending > 0 || playing.size > 0 || worker === null) return;
-  cancelUnload();
-  idleTimer = setTimeout(unload, IDLE_UNLOAD_MS);
-}
-
 function unload(): void {
-  cancelUnload();
   worker?.terminate();
   worker = null;
   void audio?.close();
   audio = null;
   playhead = 0;
-  pending = 0;
-  playing.clear();
-  if (state !== IDLE) setState(IDLE);
+  // Keep a load error visible after releasing the broken worker.
+  if (state.status !== "error") setState({ status: "idle", device: null, error: null });
 }
 
-function ensureRunning(): void {
-  cancelUnload();
-  if (audio === null) audio = new AudioContext();
-  void audio.resume();
+function unloadIfUnused(): void {
+  if (!keepLoaded && queue.length === 0 && worker !== null) unload();
+}
+
+function ensureWorker(): void {
   if (worker !== null) return;
   worker = new Worker(new URL("./kokoro.worker.ts", import.meta.url), { type: "module" });
   worker.addEventListener("message", onWorkerMessage);
   worker.addEventListener("error", (event) => {
-    pending = 0;
     setState({ status: "error", error: event.message || "The voice failed to load." });
-    scheduleUnloadWhenQuiet();
+    queue = [];
+    syncActiveKey();
+    unloadIfUnused();
   });
   setState({ status: "loading", error: null });
 }
 
-export function speak(text: string, voice: string): void {
-  ensureRunning();
-  pending += 1;
-  post({ type: "speak", id: nextId++, epoch, text, voice });
-}
-
-/** Silences current speech and drops anything still queued. */
-export function stopSpeaking(): void {
-  epoch += 1;
-  pending = 0;
-  post({ type: "cancel", epoch });
-  for (const source of playing) source.stop();
-  playing.clear();
-  playhead = 0;
-  if (state.speaking) setState({ speaking: false });
-  scheduleUnloadWhenQuiet();
-}
-
-/** Stops speech and releases everything immediately, e.g. when read aloud is turned off. */
-export function shutdownReadAloud(): void {
+/** While true the model loads now and stays loaded; turning it off stops speech and unloads. */
+export function setKeepLoaded(next: boolean): void {
+  keepLoaded = next;
+  if (next) {
+    ensureWorker();
+    return;
+  }
   stopSpeaking();
-  unload();
+  if (worker !== null) unload();
+  if (state.status === "error") setState({ status: "idle", device: null, error: null });
+}
+
+export function speak(text: string, options: SpeakOptions): void {
+  ensureWorker();
+  audio ??= new AudioContext();
+  void audio.resume();
+  const id = nextId++;
+  queue.push({ id, key: options.key, onHeard: options.onHeard, source: null });
+  syncActiveKey();
+  post({
+    type: "speak",
+    id,
+    epoch: state.epoch,
+    text,
+    voice: options.voice,
+    speed: options.speed,
+  });
+}
+
+/** Silences current speech and drops everything queued. Returns the keys that were dropped. */
+export function stopSpeaking(): ReadonlySet<string> {
+  const dropped = new Set(queue.map((chunk) => chunk.key));
+  const sources = queue.flatMap((chunk) => (chunk.source === null ? [] : [chunk.source]));
+  queue = [];
+  playhead = 0;
+  setState({ epoch: state.epoch + 1, activeKey: null });
+  post({ type: "cancel", epoch: state.epoch });
+  for (const source of sources) source.stop();
+  unloadIfUnused();
+  return dropped;
 }
 
 function subscribe(listener: () => void): () => void {
@@ -153,5 +201,22 @@ export function useReadAloudState(): ReadAloudState {
     subscribe,
     () => state,
     () => IDLE,
+  );
+}
+
+/** Whether chunks for `key` are playing or queued; re-renders only when that changes. */
+export function useIsReadingAloud(key: string): boolean {
+  return useSyncExternalStore(
+    subscribe,
+    () => state.activeKey === key,
+    () => false,
+  );
+}
+
+export function useReadAloudEpoch(): number {
+  return useSyncExternalStore(
+    subscribe,
+    () => state.epoch,
+    () => 0,
   );
 }

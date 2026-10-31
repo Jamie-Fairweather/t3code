@@ -68,6 +68,11 @@ describe("takeSpeakable", () => {
     expect(streamed(message, 1)).toEqual(expected);
     expect(streamed(message, 7)).toEqual(expected);
     expect(streamed(message, message.length)).toEqual(expected);
+    // The reader re-splits the whole text each time and resumes by chunk count.
+    for (let length = 0; length <= message.length; length += 1) {
+      const { chunks } = takeSpeakable(message.slice(0, length), 0, false);
+      expect(chunks).toEqual(expected.slice(0, chunks.length));
+    }
   });
 });
 

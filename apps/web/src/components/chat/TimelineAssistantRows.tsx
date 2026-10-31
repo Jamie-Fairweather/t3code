@@ -22,6 +22,8 @@ import { useUiStateStore } from "~/uiStateStore";
 import { formatChatTimestampTooltip, formatDayAwareTimestamp } from "../../timestampFormat";
 import { useV2ItemSupport } from "../../state/v2ItemSupport";
 import { TimelineRowCtx, TimelineRowActivityCtx, type TimelineRow } from "./timelineRowContext";
+import { scopedThreadKey } from "@t3tools/client-runtime/environment";
+import { ReadAloudReplyButton } from "~/readAloud/ReadAloudReplyButton";
 import { MESSAGE_HEADING_LEVEL, MessageAuthorHeading } from "./TimelineRowParts";
 
 export function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
@@ -187,6 +189,13 @@ function AssistantMessageMeta({
       />
       {projectedItem?.item.type === "assistant_message" ? (
         <AssistantForkButton projectedItem={projectedItem} />
+      ) : null}
+      {ctx.threadRef && !copyStreaming && message.text?.trim() ? (
+        <ReadAloudReplyButton
+          threadKey={scopedThreadKey(ctx.threadRef)}
+          itemId={projectedItem?.item.id ?? message.id}
+          text={message.text}
+        />
       ) : null}
       {!message.streaming && (
         <Tooltip>

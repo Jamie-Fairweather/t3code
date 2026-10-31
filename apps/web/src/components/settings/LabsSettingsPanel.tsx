@@ -4,9 +4,13 @@ import { Link } from "@tanstack/react-router";
 import { hasCloudPublicConfig } from "~/cloud/publicConfig";
 import { useT3ConnectAuthPrompt } from "../clerk/useT3ConnectAuthPrompt";
 import { Button } from "../ui/button";
-import { READ_ALOUD_VOICES } from "~/readAloud/voices";
-import { shutdownReadAloud } from "~/readAloud/readAloudEngine";
-import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
+import { useClientSettings } from "~/hooks/useSettings";
+import { setReadAloudEnabled } from "~/readAloud/readAloudActions";
+import {
+  ReadAloudPreviewButton,
+  ReadAloudSpeedSlider,
+  ReadAloudVoiceSelect,
+} from "~/readAloud/ReadAloudControls";
 import { Switch } from "../ui/switch";
 import { ScopedSwitch } from "./ScopedSwitch";
 import { SettingsPageContainer, SettingsRow, SettingsSection } from "./settingsLayout";
@@ -23,6 +27,7 @@ export function LabsSettingsPanel() {
         <BoringSidebarMultilineRow />
         <ReadAloudRow />
         <ReadAloudVoiceRow />
+        <ReadAloudSpeedRow />
         {/* Clerk is only mounted when this build has T3 Connect. */}
         {hasCloudPublicConfig() ? <GuestLinksRowWithSignIn /> : <GuestLinksRow />}
         <LinkedEnvironmentsRow />
@@ -75,19 +80,15 @@ function BoringSidebarMultilineRow() {
 }
 
 function ReadAloudRow() {
-  const settings = useScopedSettings();
-  const updateSettings = useUpdateScopedSettings();
+  const enabled = useClientSettings((settings) => settings.readAloudEnabled);
   return (
     <SettingsRow
       {...searchableSetting("read-aloud")}
-      description="Speak agent replies as they stream in, using the Kokoro voice model on this device. The model (about 300 MB) downloads once, loads only while there is something to say, and unloads after 30 seconds of quiet. Also toggled from the speaker button in the thread header."
+      description="Speak agent replies as they stream in, using the Kokoro voice model on this device. The model (about 300 MB) downloads once and stays loaded while this is on. Also toggled from the speaker button in the thread header."
       control={
         <Switch
-          checked={settings.readAloudEnabled}
-          onCheckedChange={(checked) => {
-            if (!checked) shutdownReadAloud();
-            updateSettings({ readAloudEnabled: Boolean(checked) });
-          }}
+          checked={enabled}
+          onCheckedChange={(checked) => setReadAloudEnabled(Boolean(checked))}
           aria-label="Read replies aloud"
         />
       }
@@ -96,32 +97,26 @@ function ReadAloudRow() {
 }
 
 function ReadAloudVoiceRow() {
-  const settings = useScopedSettings();
-  const updateSettings = useUpdateScopedSettings();
-  const selected = READ_ALOUD_VOICES.find((voice) => voice.id === settings.readAloudVoice);
   return (
     <SettingsRow
       {...searchableSetting("read-aloud-voice")}
       description="The voice used to read replies aloud."
       control={
-        <Select
-          value={settings.readAloudVoice}
-          onValueChange={(value) => {
-            if (typeof value === "string") updateSettings({ readAloudVoice: value });
-          }}
-        >
-          <SelectTrigger size="sm" className="w-full sm:w-48" aria-label="Read aloud voice">
-            <SelectValue>{selected?.label ?? settings.readAloudVoice}</SelectValue>
-          </SelectTrigger>
-          <SelectPopup align="end" alignItemWithTrigger={false}>
-            {READ_ALOUD_VOICES.map((voice) => (
-              <SelectItem hideIndicator key={voice.id} value={voice.id}>
-                {voice.label}
-              </SelectItem>
-            ))}
-          </SelectPopup>
-        </Select>
+        <div className="flex w-full items-center gap-2 sm:w-auto">
+          <ReadAloudVoiceSelect className="flex-1 sm:w-48 sm:flex-none" />
+          <ReadAloudPreviewButton />
+        </div>
       }
+    />
+  );
+}
+
+function ReadAloudSpeedRow() {
+  return (
+    <SettingsRow
+      {...searchableSetting("read-aloud-speed")}
+      description="How fast replies are read aloud."
+      control={<ReadAloudSpeedSlider className="w-full sm:w-48" />}
     />
   );
 }
