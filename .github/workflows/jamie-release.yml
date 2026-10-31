@@ -1,0 +1,118 @@
+# Fork-only release: builds the Windows x64 installer from this fork's main and
+# publishes it as a GitHub release, which installed copies auto-update from (the
+# build points its updater at GITHUB_REPOSITORY). The version is the desktop
+# package version from upstream main plus "-jamie.<run number>", so every build
+# sorts above the last one and the updater offers it. Unsigned.
+name: Jamie release (Windows x64)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# A newer push supersedes a build still in flight.
+concurrency:
+  group: jamie-release
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish
+    if: github.repository != 'pingdotgg/t3code'
+    runs-on: windows-2025
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          sparse-checkout: |
+            /*
+            !/.repos/
+          sparse-checkout-cone-mode: false
+
+      # Same setup as windows-tests.yml: setup-vp's own cache is Linux-shaped.
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: false
+          run-install: false
+
+      - name: Resolve package cache path
+        id: package_cache_path
+        shell: pwsh
+        run: '"path=$(vp pm cache dir)" >> $env:GITHUB_OUTPUT'
+
+      - name: Cache packages
+        uses: actions/cache@v6
+        with:
+          path: ${{ steps.package_cache_path.outputs.path }}
+          key: jamie-release-packages-v1-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: jamie-release-packages-v1-
+
+      - name: Install
+        shell: bash
+        run: vp install
+
+      - name: Add Rust target
+        shell: bash
+        run: rustup target add x86_64-pc-windows-msvc
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="$(node -p "require('./apps/desktop/package.json').version")"
+          version="${base%%-*}-jamie.${GITHUB_RUN_NUMBER}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Building $version"
+
+      - name: Align package versions
+        shell: bash
+        run: node scripts/update-release-package-versions.ts "${{ steps.version.outputs.version }}"
+
+      - name: Build installer
+        shell: bash
+        run: >-
+          vp run dist:desktop:artifact
+          --platform win --target nsis --arch x64
+          --build-version "${{ steps.version.outputs.version }}"
+          --verbose
+
+      - name: Publish release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          assets=(release/*.exe release/*.blockmap release/latest.yml)
+          if [[ ! -f release/latest.yml || ${#assets[@]} -lt 3 ]]; then
+            echo "Missing installer or update manifest in release/:" >&2
+            ls -la release >&2
+            exit 1
+          fi
+          upstream="$(git log -1 --format='%h %s' HEAD)"
+          gh release create "v$VERSION" "${assets[@]}" \
+            --target "$GITHUB_SHA" \
+            --title "T3 Code $VERSION" \
+            --notes "Windows x64 build of this fork at \`$upstream\`. Unsigned: Windows may warn on first install (More info, then Run anyway). Installed copies update themselves from these releases." \
+            --latest
+
+      # Keep the newest few; installed copies only ever need the latest.
+      - name: Prune old releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release list --limit 100 --json tagName --jq '.[].tagName' \
+            | grep -E -- '-jamie\.[0-9]+$' \
+            | sort -t. -k4,4nr \
+            | tail -n +6 \
+            | while read -r tag; do gh release delete "$tag" --yes --cleanup-tag; done
