@@ -55,6 +55,7 @@ import { OpenInPicker } from "~/components/chat/OpenInPicker";
 import { MediaVideoPlayer } from "~/components/media/MediaVideoPlayer";
 import { MediaActions, type MediaActionSource } from "~/components/media/MediaActions";
 import { MorphIcon } from "~/components/MorphIcon";
+import { ReadAloudFileButton, readAloudFileItemId } from "~/readAloud/ReadAloudFileButton";
 import { useRemoteOpenState } from "~/remoteOpen";
 import { useClientSettings } from "~/hooks/useSettings";
 import { useTheme } from "~/hooks/useTheme";
@@ -940,7 +941,10 @@ function RenderedMarkdownSurface({
   useFileSaveSession(saveTarget, onPendingChange);
 
   return (
-    <ScrollArea className="min-h-0 flex-1">
+    <ScrollArea
+      className="min-h-0 flex-1"
+      data-read-aloud-item={readAloudFileItemId(environmentId, cwd, relativePath)}
+    >
       <FileMarkdownPreview
         text={contents}
         cwd={cwd}
@@ -1300,6 +1304,12 @@ export default function FilePreviewPanel({
                 icon={rendered ? Code2 : renderedMode === "table" ? Table2 : Eye}
               />
             </FileSurfaceAction>
+          ) : null}
+          {isMarkdown && attachment === undefined && relativePath && file.data ? (
+            <ReadAloudFileButton
+              itemId={readAloudFileItemId(environmentId, cwd, relativePath)}
+              text={file.data.contents}
+            />
           ) : null}
           {showsRawText ? (
             <FileSurfaceAction

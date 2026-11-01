@@ -3,8 +3,11 @@ import { getClientSettings, updateClientSettings } from "~/hooks/useSettings";
 import { speak, stopSpeaking } from "./readAloudEngine";
 import { HEARD_ALL, parseReadAloudKey, recordHeard, restartReadAloudSince } from "./readProgress";
 import { takeSpeakable } from "./speakableText";
+import { startWordsAt } from "./wordHighlight";
 
 export const READ_ALOUD_PREVIEW_KEY = "read-aloud-preview";
+/** Stands in for the thread in keys for files read aloud, so they share reply word highlighting. */
+export const READ_ALOUD_FILE_THREAD = "file";
 const PREVIEW_TEXT = "Hi! This is how replies will sound.";
 
 export function setReadAloudEnabled(enabled: boolean): void {
@@ -16,13 +19,21 @@ export function setReadAloudEnabled(enabled: boolean): void {
 export function stopReadingAloud(): void {
   for (const key of stopSpeaking()) {
     const reply = parseReadAloudKey(key);
-    if (reply !== null) recordHeard(reply.threadKey, reply.itemId, HEARD_ALL);
+    if (reply !== null && reply.threadKey !== READ_ALOUD_FILE_THREAD)
+      recordHeard(reply.threadKey, reply.itemId, HEARD_ALL);
   }
 }
 
 /** Reads one reply from the top, replacing whatever is playing. */
 export function readReplyAloud(key: string, text: string): void {
   stopSpeaking();
+  for (const chunk of takeSpeakable(text, 0, true).chunks) speakWithSettings(chunk, key);
+}
+
+/** Reads just the text the user selected in a reply, replacing whatever is playing. */
+export function readSelectionAloud(key: string, text: string, range: Range): void {
+  stopSpeaking();
+  startWordsAt(key, range);
   for (const chunk of takeSpeakable(text, 0, true).chunks) speakWithSettings(chunk, key);
 }
 

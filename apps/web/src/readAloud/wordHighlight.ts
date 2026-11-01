@@ -61,16 +61,28 @@ function clear(): void {
   for (const name of Object.values(HIGHLIGHT_NAMES)) CSS.highlights.delete(name);
 }
 
+function replyRoot(key: string): HTMLElement | null {
+  const reply = parseReadAloudKey(key);
+  return reply === null
+    ? null
+    : document.querySelector<HTMLElement>(`[data-read-aloud-item="${CSS.escape(reply.itemId)}"]`);
+}
+
+/** Starts matching `key`'s spoken words at `range`, so a read-aloud selection lights up there. */
+export function startWordsAt(key: string, range: Range): void {
+  const root = replyRoot(key);
+  const entry = root
+    ? readableText(root).nodes.find(({ node }) => node === range.startContainer)
+    : undefined;
+  cursors.set(key, entry ? entry.start + range.startOffset : 0);
+}
+
 function paint(word: SpokenWord | null): void {
   current = word;
   clear();
   const settings = getClientSettings();
   if (word === null || !settings.readAloudWordHighlight) return;
-  const reply = parseReadAloudKey(word.key);
-  const root =
-    reply === null
-      ? null
-      : document.querySelector<HTMLElement>(`[data-read-aloud-item="${CSS.escape(reply.itemId)}"]`);
+  const root = replyRoot(word.key);
   // Scrolled out of view, or not a reply (the voice preview).
   if (root === null) return;
   const { text, nodes } = readableText(root);
