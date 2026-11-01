@@ -270,6 +270,10 @@ export function useIsReadingAloud(key: string): boolean {
   );
 }
 
+export function readAloudEpoch(): number {
+  return state.epoch;
+}
+
 export function useReadAloudEpoch(): number {
   return useSyncExternalStore(
     subscribe,
