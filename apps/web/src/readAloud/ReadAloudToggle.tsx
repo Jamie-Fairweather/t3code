@@ -18,7 +18,12 @@ import {
   ReadAloudWordSwitch,
 } from "./ReadAloudControls";
 import { setReadAloudEnabled, speakWithSettings, stopReadingAloud } from "./readAloudActions";
-import { stopSpeaking, useReadAloudEpoch, useReadAloudState } from "./readAloudEngine";
+import {
+  readAloudEpoch,
+  stopSpeaking,
+  useReadAloudEpoch,
+  useReadAloudState,
+} from "./readAloudEngine";
 import {
   HEARD_ALL,
   keepHeard,
@@ -152,7 +157,11 @@ function ReadAloudThread({ threadRef }: { threadRef: ScopedThreadRef }) {
 
     const plan = planThreadReads(items, heard, readAloudSince());
     keepHeard(threadKey, plan.current);
-    if (queued.current.epoch !== epoch) queued.current = { epoch, counts: new Map() };
+    // The rendered epoch can be stale: the previous thread's reader stops the engine in this same commit.
+    const currentEpoch = readAloudEpoch();
+    if (queued.current.epoch !== currentEpoch) {
+      queued.current = { epoch: currentEpoch, counts: new Map() };
+    }
     const counts = queued.current.counts;
     for (const read of plan.reads) {
       const { chunks } = takeSpeakable(read.text, 0, read.final);
@@ -173,6 +182,7 @@ function ReadAloudThread({ threadRef }: { threadRef: ScopedThreadRef }) {
       }
       counts.set(read.itemId, chunks.length);
     }
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- epoch re-feeds the engine after a stop drops its queue
   }, [items, heard, epoch, threadKey]);
 
   return null;
