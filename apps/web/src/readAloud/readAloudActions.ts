@@ -5,6 +5,8 @@ import { HEARD_ALL, parseReadAloudKey, recordHeard, restartReadAloudSince } from
 import { takeSpeakable } from "./speakableText";
 
 export const READ_ALOUD_PREVIEW_KEY = "read-aloud-preview";
+/** Stands in for the thread in keys for files read aloud, so they share reply word highlighting. */
+export const READ_ALOUD_FILE_THREAD = "file";
 const PREVIEW_TEXT = "Hi! This is how replies will sound.";
 
 export function setReadAloudEnabled(enabled: boolean): void {
@@ -16,7 +18,8 @@ export function setReadAloudEnabled(enabled: boolean): void {
 export function stopReadingAloud(): void {
   for (const key of stopSpeaking()) {
     const reply = parseReadAloudKey(key);
-    if (reply !== null) recordHeard(reply.threadKey, reply.itemId, HEARD_ALL);
+    if (reply !== null && reply.threadKey !== READ_ALOUD_FILE_THREAD)
+      recordHeard(reply.threadKey, reply.itemId, HEARD_ALL);
   }
 }
 
