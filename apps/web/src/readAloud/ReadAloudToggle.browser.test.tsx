@@ -13,6 +13,7 @@ vi.mock("~/hooks/useSettings", () => ({
   useClientSettings: <T,>(select: (settings: { readAloudEnabled: boolean }) => T) =>
     select({ readAloudEnabled: true }),
   getClientSettings: () => ({ readAloudVoice: "af_heart", readAloudSpeed: 1 }),
+  subscribeClientSettings: () => () => {},
   updateClientSettings: vi.fn(),
 }));
 vi.mock("~/state/entities", () => ({

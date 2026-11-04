@@ -101,6 +101,7 @@ function clearQueue(): Array<AudioBufferSourceNode> {
 }
 
 function post(request: ReadAloudWorkerRequest): void {
+  // oxlint-disable-next-line unicorn/require-post-message-target-origin -- Web workers do not accept a target origin.
   worker?.postMessage(request);
 }
 

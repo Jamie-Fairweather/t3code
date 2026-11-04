@@ -1047,6 +1047,7 @@ export const T3_CODE_OLD_THEME: ThemeDefinition = {
       terminalScrollbarHover: "oklch(0.33289 0 0)",
     },
   },
+  sidebarArtwork: true,
 };
 
 export const BUILT_IN_THEMES: ReadonlyArray<ThemeDefinition> = [
