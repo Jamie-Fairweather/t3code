@@ -3184,7 +3184,10 @@ function collectUnpackedAsarFiles(
   return output;
 }
 
-const countPayloadFiles = Effect.fn("desktopArtifact.countPayloadFiles")(function* (root: string) {
+const countPayloadFiles = Effect.fn("desktopArtifact.countPayloadFiles")(function* (
+  root: string,
+  skippedDirectory: string,
+) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const pendingDirectories = [root];
@@ -3198,7 +3201,7 @@ const countPayloadFiles = Effect.fn("desktopArtifact.countPayloadFiles")(functio
       const entryPath = path.join(directory, entry);
       const stat = yield* fs.stat(entryPath);
       if (stat.type === "Directory") {
-        pendingDirectories.push(entryPath);
+        if (entryPath !== skippedDirectory) pendingDirectories.push(entryPath);
       } else if (stat.type === "File") {
         count += 1;
       }
@@ -3515,7 +3518,12 @@ export const validateWindowsPackagedPayload = Effect.fn(
     }
   }
 
-  const fileCount = yield* countPayloadFiles(packagedAppDir);
+  // Only native builds prepare server bytecode, one file per bundled server module, so it stays
+  // out of the budget that cross-built and native payloads share.
+  const fileCount = yield* countPayloadFiles(
+    packagedAppDir,
+    path.join(packagedAppDir, "resources", "server-compile-cache"),
+  );
   if (fileCount > fileLimit) {
     return yield* new WindowsPackagedPayloadValidationError({
       reason: "file-limit-exceeded",
