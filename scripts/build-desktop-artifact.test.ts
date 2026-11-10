@@ -1342,6 +1342,31 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     ),
   );
 
+  it.effect("leaves prepared server bytecode out of the file-count budget", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const fixture = yield* makeWindowsPayloadFixture({ copyUnpackedNatives: true });
+        const validate = validateWindowsPackagedPayload({
+          stageDistDir: fixture.stageDistDir,
+          appExecutableName: fixture.appExecutableName,
+          targetArch: "x64",
+          appVersion: WINDOWS_PAYLOAD_FIXTURE_VERSION,
+        });
+        const before = yield* validate;
+        const cacheDir = path.join(fixture.packagedAppDir, "resources", "server-compile-cache");
+        yield* fs.makeDirectory(cacheDir, { recursive: true });
+        for (let index = 0; index < WINDOWS_PACKAGED_PAYLOAD_FILE_LIMIT; index += 1) {
+          yield* fs.writeFileString(path.join(cacheDir, `module-${index}`), "bytecode");
+        }
+
+        const after = yield* validate;
+        assert.equal(after.fileCount, before.fileCount);
+      }),
+    ).pipe(Effect.provideService(HostProcess.Platform, "linux")),
+  );
+
   it.effect("rejects a sidecar whose extracted server bundle cannot resolve", () =>
     Effect.scoped(
       Effect.gen(function* () {
